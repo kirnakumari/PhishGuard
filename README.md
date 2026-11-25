@@ -1,84 +1,95 @@
- # PhishGuard – Cybersecurity Threat Detection System
 
-## Project Overview
-PhishGuard is a Python-based cybersecurity application developed using Streamlit. It helps users identify common suspicious indicators in URLs and email messages.
+# 🛡️ PhishGuard
+### AI-Assisted Phishing Detection & Cybersecurity Analysis
 
-The system analyzes user input, calculates a risk score, classifies the risk level, and stores scan history for future analysis.
+PhishGuard is a web-based cybersecurity application designed to identify suspicious URLs and phishing emails. It combines rule-based security analysis with VirusTotal threat intelligence to help users understand potential online threats.
 
-## Features
+## 🚀 Features
 
-- URL Scanner
-- Email Phishing Detector
-- Risk Score Calculation
-- High, Medium and Low Risk Classification
-- Security Analytics Dashboard
-- Scan History Management
-- Search and Filter Options
-- Downloadable Scan Reports
-- SQLite Database Integration
+- **URL Scanner:** Detects suspicious URL characteristics and calculates a risk score.
+- **VirusTotal Integration:** Checks URL reputation using VirusTotal threat intelligence.
+- **Email Phishing Detector:** Analyzes email content for suspicious patterns.
+- **Security Analytics Dashboard:** Visualizes scan statistics, risk distribution and scan activity.
+- **Scan Reports:** Stores scan history and supports CSV and TXT downloads.
+- **SQLite Database:** Maintains scan records for future analysis.
 
-## Technologies Used
+## 🛠️ Technologies Used
 
-- Python
-- Streamlit
-- SQLite
-- Pandas
-- Plotly
+| Technology | Purpose |
+|---|---|
+| Python | Core programming |
+| Streamlit | Web application interface |
+| Pandas | Data handling |
+| Plotly | Interactive visualizations |
+| SQLite | Scan history storage |
+| VirusTotal API | URL threat intelligence |
 
-## Project Structure
+## ⚙️ Application Workflow
+
+1. User enters a URL or email content.
+2. PhishGuard performs rule-based security analysis.
+3. URL reputation is checked through VirusTotal.
+4. Risk information and detection results are displayed.
+5. Scan records are stored in the database.
+6. Dashboard presents security analytics and reports.
+
+## 📂 Project Structure
 
 ```text
 PhishGuard/
+│
 ├── app.py
-├── database.py
 ├── url_scanner.py
 ├── email_detector.py
+├── database.py
 ├── dashboard.py
 ├── requirements.txt
-└── database/
-	 └── scans.db
+└── README.md
 ```
 
-## Installation
+## ▶️ Run Locally
 
-1. Clone or download the project.
-2. Open the project folder in VS Code.
-3. Install the required libraries:
+Clone the repository:
 
-	```bash
-	pip install -r requirements.txt
-	```
+```bash
+git clone https://github.com/kirnakumari/PhishGuard.git
+cd PhishGuard
+```
 
-4. Run the application:
+Install dependencies:
 
-	```bash
-	streamlit run app.py
-	```
+```bash
+pip install -r requirements.txt
+```
 
-## Working
+Configure your VirusTotal API key using Streamlit secrets:
 
-1. The user enters a URL or email content.
-2. The system checks for predefined suspicious indicators.
-3. A risk score is calculated.
-4. The application displays the risk level and analysis.
-5. Scan details are stored in the SQLite database.
-6. Users can view previous scans in the dashboard.
+```toml
+VT_API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
+```
 
-## Limitations
+Run the application:
 
-- The detection system uses predefined rules and keywords.
-- It does not connect to live threat intelligence databases.
-- Risk scores are indicators, not confirmed malware or phishing verdicts.
+```bash
+streamlit run app.py
+```
 
-## Future Scope
+## 🌐 Live Application
 
-- Integration with VirusTotal or other threat intelligence APIs.
-- Machine learning-based phishing detection.
-- Real-time threat monitoring.
-- Advanced email header analysis.
-- User authentication and access control.
+[Open PhishGuard](https://phishguard-security.streamlit.app/)
 
-## Developed By
+## 🔐 Security Note
 
-Kirna Kumari  
-B.Tech CSE (Internet of Things)
+Automated phishing detection is an assistance tool, not a guarantee of safety. VirusTotal results depend on available security engine reports and API availability.
+
+## 👩‍💻 Developer
+
+**Kirna Kumari**
+
+B.Tech CSE | Internet of Things
+
+GitHub: [kirnakumari](https://github.com/kirnakumari)
+
+---
+
+*PhishGuard – Promoting safer digital interactions.*
