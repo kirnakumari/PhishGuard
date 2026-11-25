@@ -32,6 +32,33 @@ PhishGuard is a web-based cybersecurity application designed to identify suspici
 4. Risk information and detection results are displayed.
 5. Scan records are stored in the database.
 6. Dashboard presents security analytics and reports.
+   
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    A[User] --> B[PhishGuard Streamlit Interface]
+
+    B --> C[URL Scanner]
+    B --> D[Email Detector]
+
+    C --> E[Rule-Based URL Analysis]
+    C --> F[VirusTotal API]
+
+    D --> G[Email Pattern Analysis]
+
+    E --> H[Risk Assessment]
+    F --> H
+    G --> H
+
+    H --> I[SQLite Database]
+    I --> J[Analytics Dashboard]
+    I --> K[Scan Reports]
+
+    J --> L[Charts and Risk Statistics]
+    K --> M[CSV / TXT Downloads]
+```
 
 ## 📂 Project Structure
 
