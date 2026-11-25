@@ -26,17 +26,16 @@ except Exception:
 
 def virustotal_scan(url):
     if not VT_API_KEY:
-        return {"status": "No VirusTotal API key configured."}
+        return {"status": "VirusTotal API key is missing."}
 
     try:
-        url_id = base64.urlsafe_b64encode(
-            url.encode()
-        ).decode().strip("=")
-
         headers = {"x-apikey": VT_API_KEY}
+        encoded_url = base64.urlsafe_b64encode(
+            url.encode("utf-8")
+        ).decode("utf-8").rstrip("=")
 
         response = requests.get(
-            f"https://www.virustotal.com/api/v3/urls/{url_id}",
+            f"https://www.virustotal.com/api/v3/urls/{encoded_url}",
             headers=headers,
             timeout=20
         )
@@ -45,7 +44,7 @@ def virustotal_scan(url):
             stats = response.json()["data"]["attributes"].get(
                 "last_analysis_stats", {}
             )
-            return {"status": "found", "stats": stats}
+            return {"status": "success", "stats": stats}
 
         if response.status_code == 404:
             submit = requests.post(
@@ -54,19 +53,23 @@ def virustotal_scan(url):
                 data={"url": url},
                 timeout=20
             )
-            if submit.status_code == 200:
+
+            if submit.status_code in (200, 201):
                 return {"status": "submitted"}
-            return {"status": f"API error: {submit.status_code}"}
 
-        if response.status_code == 401:
-            return {"status": "Invalid API key."}
-        if response.status_code == 429:
-            return {"status": "API rate limit reached."}
+            return {
+                "status": "error",
+                "message": submit.text
+            }
 
-        return {"status": f"API error: {response.status_code}"}
+        return {
+            "status": "error",
+            "message": response.text,
+            "code": response.status_code
+        }
 
-    except requests.RequestException:
-        return {"status": "Could not connect to VirusTotal."}
+    except requests.RequestException as e:
+        return {"status": "error", "message": str(e)}
 
 
 st.title("🛡️ PhishGuard")
@@ -90,10 +93,12 @@ if menu == "Home":
         "using rule-based analysis and VirusTotal threat intelligence."
     )
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Detection", "URL & Email")
-    col2.metric("Threat Intelligence", "VirusTotal")
-    col3.metric("Database", "SQLite")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Detection", "URL & Email")
+    c2.metric("Threat Intelligence", "VirusTotal")
+    c3.metric("Database", "SQLite")
+
+    st.info("Protect yourself from suspicious links and phishing emails.")
 
 elif menu == "URL Scanner":
     st.header("🌐 URL Security Scanner")
@@ -104,11 +109,14 @@ elif menu == "URL Scanner":
             st.warning("Please enter a URL.")
         else:
             with st.spinner("Scanning URL..."):
-                result = scan_url(url)
+                result = scan_url(url.strip())
 
             save_scan(
-                "URL", url, result["risk_level"],
-                result["risk_score"], result["result"]
+                "URL",
+                url.strip(),
+                result["risk_level"],
+                result["risk_score"],
+                result["result"]
             )
 
             st.subheader("Local Security Analysis")
@@ -124,22 +132,27 @@ elif menu == "URL Scanner":
             st.subheader("VirusTotal Threat Intelligence")
 
             with st.spinner("Checking VirusTotal..."):
-                vt_result = virustotal_scan(url.strip())
+                vt = virustotal_scan(url.strip())
 
-            if vt_result["status"] == "found":
-                stats = vt_result["stats"]
-                st.write("Latest available VirusTotal analysis:")
-                st.write(f"Malicious: {stats.get('malicious', 0)}")
-                st.write(f"Suspicious: {stats.get('suspicious', 0)}")
-                st.write(f"Harmless: {stats.get('harmless', 0)}")
-                st.write(f"Undetected: {stats.get('undetected', 0)}")
-            elif vt_result["status"] == "submitted":
+            if vt["status"] == "success":
+                stats = vt["stats"]
+                st.write("Latest VirusTotal Analysis")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Malicious", stats.get("malicious", 0))
+                c2.metric("Suspicious", stats.get("suspicious", 0))
+                c3.metric("Harmless", stats.get("harmless", 0))
+                c4.metric("Undetected", stats.get("undetected", 0))
+
+            elif vt["status"] == "submitted":
                 st.info(
-                    "URL submitted to VirusTotal. Analysis may take time. "
-                    "Please scan again later."
+                    "URL submitted to VirusTotal. Analysis is pending. "
+                    "Please scan again after some time."
                 )
+
             else:
-                st.warning(vt_result["status"])
+                st.error("VirusTotal could not complete the scan.")
+                st.write(vt.get("code", ""))
+                st.code(vt.get("message", vt.get("status", "Unknown error")))
 
 elif menu == "Email Detector":
     st.header("📧 Email Phishing Detector")
@@ -152,8 +165,11 @@ elif menu == "Email Detector":
             result = detect_email(email_text)
 
             save_scan(
-                "Email", email_text, result["risk_level"],
-                result["risk_score"], result["result"]
+                "Email",
+                email_text,
+                result["risk_level"],
+                result["risk_score"],
+                result["result"]
             )
 
             st.metric("Risk Score", f'{result["risk_score"]}/100')
@@ -190,10 +206,9 @@ elif menu == "Scan Reports":
             "text/csv"
         )
 
-        report = df.to_string(index=False)
         st.download_button(
             "Download TXT",
-            report,
+            df.to_string(index=False),
             "phishguard_reports.txt",
             "text/plain"
         )
