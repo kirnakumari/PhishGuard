@@ -2,19 +2,18 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-
 from database import get_scans
 
 
 def show_dashboard():
 
-    st.title("Security Analytics Dashboard")
-    st.write("Monitor and analyze your security scan history.")
+    st.title("📊 Security Analytics Dashboard")
+    st.caption("Monitor threats, analyze scan activity and track security risks.")
 
     records = get_scans()
 
     if not records:
-        st.info("No scan history available.")
+        st.info("No scan history available. Start scanning URLs or emails first.")
         return
 
     columns = [
@@ -25,139 +24,182 @@ def show_dashboard():
 
     df = pd.DataFrame(records, columns=columns)
 
-    # Search and filter section
-    st.subheader("Search and Filter")
+    df["Risk Score"] = pd.to_numeric(
+        df["Risk Score"], errors="coerce"
+    ).fillna(0)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        scan_filter = st.selectbox(
-            "Select Scan Type",
-            ["All", "URL", "Email"]
-        )
-
-    with col2:
-        risk_filter = st.selectbox(
-            "Select Risk Level",
-            ["All", "High", "Medium", "Low"]
-        )
-
-    search = st.text_input(
-        "Search website or email content",
-        placeholder="Enter a keyword..."
+    df["Scan Time"] = pd.to_datetime(
+        df["Scan Time"], errors="coerce"
     )
 
-    filtered_df = df.copy()
+    # Filters
+    st.subheader("🔎 Filter Scan Records")
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        scan_filter = st.selectbox(
+            "Scan Type", ["All", "URL", "Email"]
+        )
+
+    with c2:
+        risk_filter = st.selectbox(
+            "Risk Level", ["All", "High", "Medium", "Low"]
+        )
+
+    with c3:
+        search = st.text_input(
+            "Search Input", placeholder="Search URL or email..."
+        )
+
+    filtered = df.copy()
 
     if scan_filter != "All":
-        filtered_df = filtered_df[
-            filtered_df["Scan Type"] == scan_filter
-        ]
+        filtered = filtered[filtered["Scan Type"] == scan_filter]
 
     if risk_filter != "All":
-        filtered_df = filtered_df[
-            filtered_df["Risk Level"] == risk_filter
-        ]
+        filtered = filtered[filtered["Risk Level"] == risk_filter]
 
     if search.strip():
-        filtered_df = filtered_df[
-            filtered_df["Input"].str.contains(
-                search,
-                case=False,
-                na=False,
-                regex=False
+        filtered = filtered[
+            filtered["Input"].astype(str).str.contains(
+                search, case=False, regex=False, na=False
             )
         ]
 
     st.divider()
 
-    # Metrics based on filtered records
-    st.subheader("Scan Overview")
+    # KPI Cards
+    st.subheader("📌 Security Overview")
 
-    total = len(filtered_df)
+    total = len(filtered)
+    high = (filtered["Risk Level"] == "High").sum()
+    medium = (filtered["Risk Level"] == "Medium").sum()
+    low = (filtered["Risk Level"] == "Low").sum()
 
-    high = len(
-        filtered_df[filtered_df["Risk Level"] == "High"]
+    avg_score = (
+        round(filtered["Risk Score"].mean(), 1)
+        if total else 0
     )
 
-    medium = len(
-        filtered_df[filtered_df["Risk Level"] == "Medium"]
-    )
-
-    low = len(
-        filtered_df[filtered_df["Risk Level"] == "Low"]
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric("Total Scans", total)
-    c2.metric("High Risk", high)
-    c3.metric("Medium Risk", medium)
-    c4.metric("Low Risk", low)
+    c2.metric("High Risk", int(high))
+    c3.metric("Medium Risk", int(medium))
+    c4.metric("Low Risk", int(low))
+    c5.metric("Average Score", f"{avg_score}/100")
 
     st.divider()
 
-    # Risk chart
-    st.subheader("Risk Distribution")
+    if filtered.empty:
+        st.warning("No records match your selected filters.")
+        return
 
-    if total > 0:
+    # Risk Distribution
+    st.subheader("📈 Risk Distribution")
 
-        risk_data = pd.DataFrame({
-            "Risk Level": ["High", "Medium", "Low"],
-            "Count": [high, medium, low]
-        })
+    risk_data = (
+        filtered["Risk Level"]
+        .value_counts()
+        .reindex(["High", "Medium", "Low"], fill_value=0)
+        .rename_axis("Risk Level")
+        .reset_index(name="Scans")
+    )
 
+    col1, col2 = st.columns(2)
+
+    with col1:
         fig = px.pie(
             risk_data,
             names="Risk Level",
-            values="Count",
-            hole=0.45,
-            title="Security Scan Results"
+            values="Scans",
+            hole=0.5,
+            title="Risk Level Breakdown",
+            color="Risk Level",
+            color_discrete_map={
+                "High": "#EF4444",
+                "Medium": "#F59E0B",
+                "Low": "#10B981"
+            }
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        type_data = (
+            filtered["Scan Type"]
+            .value_counts()
+            .rename_axis("Scan Type")
+            .reset_index(name="Scans")
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
+        fig = px.bar(
+            type_data,
+            x="Scan Type",
+            y="Scans",
+            color="Scan Type",
+            title="URL vs Email Scans",
+            text="Scans"
         )
-
-    else:
-        st.warning("No records match your selected filters.")
+        st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
-    # Scan history
-    st.subheader("Recent Scan History")
+    # Scan Trend
+    st.subheader("📅 Scan Activity Trend")
 
-    if total > 0:
+    trend = filtered.dropna(subset=["Scan Time"]).copy()
 
-        display_df = filtered_df[
+    if not trend.empty:
+        trend["Date"] = trend["Scan Time"].dt.date
+
+        trend_data = (
+            trend.groupby("Date")
+            .size()
+            .reset_index(name="Total Scans")
+        )
+
+        fig = px.line(
+            trend_data,
+            x="Date",
+            y="Total Scans",
+            markers=True,
+            title="Daily Scan Activity"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Scan date information is unavailable.")
+
+    st.divider()
+
+    # Scan History
+    st.subheader("🗂️ Recent Scan History")
+
+    display_df = filtered.sort_values(
+        "ID", ascending=False
+    ).copy()
+
+    display_df["Input"] = (
+        display_df["Input"].astype(str).str.slice(0, 80)
+    )
+
+    st.dataframe(
+        display_df[
             [
                 "ID", "Scan Type", "Input",
                 "Risk Level", "Risk Score", "Scan Time"
             ]
-        ].copy()
+        ],
+        use_container_width=True,
+        hide_index=True
+    )
 
-        display_df["Input"] = (
-            display_df["Input"].str.slice(0, 70)
-        )
+    csv_data = filtered.to_csv(index=False).encode("utf-8")
 
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        # Download filtered history
-        csv_data = filtered_df.to_csv(
-            index=False
-        ).encode("utf-8")
-
-        st.download_button(
-            "Download Filtered History",
-            data=csv_data,
-            file_name="phishguard_history.csv",
-            mime="text/csv"
-        )
-
-    else:
-        st.info("No scan records found.")
+    st.download_button(
+        "⬇️ Download Dashboard Report",
+        data=csv_data,
+        file_name="phishguard_dashboard_report.csv",
+        mime="text/csv"
+    )
