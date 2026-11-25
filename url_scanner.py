@@ -7,8 +7,6 @@ from urllib.parse import urlparse
 import joblib
 import requests
 
-from url_features import extract_url_features
-
 
 # ========== CONFIGURATION ==========
 
@@ -26,13 +24,13 @@ SHORTENED_DOMAINS = [
 MODEL_PATH = (
     Path(__file__).resolve().parent
     / "models"
-    / "url_phishing_model.joblib"
+    / "url_phishing_model_v5_fast.joblib"
 )
 
 MODEL_URL = (
     "https://github.com/kirnakumari/PhishGuard/"
-    "releases/download/v1.0.0/"
-    "url_phishing_model_compressed.joblib"
+    "releases/download/v5.0.0/"
+    "url_phishing_model_v5_fast.joblib"
 )
 
 
@@ -57,15 +55,27 @@ def _load_model():
             response.raise_for_status()
 
             temp_path = MODEL_PATH.with_suffix(".tmp")
-
             temp_path.write_bytes(response.content)
-
             temp_path.replace(MODEL_PATH)
 
-        return joblib.load(MODEL_PATH)
+        model_data = joblib.load(MODEL_PATH)
+
+        if not isinstance(model_data, dict):
+            raise ValueError("Invalid V5 model format.")
+
+        vectorizer = model_data.get("vectorizer")
+        model = model_data.get("model")
+
+        if vectorizer is None or model is None:
+            raise ValueError("V5 model components missing.")
+
+        return {
+            "vectorizer": vectorizer,
+            "model": model
+        }
 
     except Exception as error:
-        print("ML Model loading error:", error)
+        print("V5 Model loading error:", error)
         return None
 
 
@@ -169,26 +179,26 @@ def scan_url(url):
 
     rule_score = min(score, 100)
 
-    # ========== MACHINE LEARNING ==========
+    # ========== V5 MACHINE LEARNING ==========
 
-    model = _load_model()
+    model_data = _load_model()
 
     ml_probability = None
     ml_status = "not_trained"
 
-    if model is not None:
+    if model_data is not None:
 
         try:
-            features = extract_url_features(url)
+            vectorizer = model_data["vectorizer"]
+            model = model_data["model"]
 
-            probabilities = model.predict_proba(
-                [features]
-            )[0]
+            # Convert raw URL into character TF-IDF features
+            url_features = vectorizer.transform([url])
 
-            classes = list(
-                model.named_steps["classifier"].classes_
-            )
+            # Predict phishing probability
+            probabilities = model.predict_proba(url_features)[0]
 
+            classes = list(model.classes_)
             phishing_index = classes.index(1)
 
             ml_probability = float(
@@ -205,7 +215,7 @@ def scan_url(url):
             ml_status = "active"
 
             checks.append(
-                f"ML phishing probability: "
+                f"V5 ML phishing probability: "
                 f"{ml_probability * 100:.1f}%."
             )
 
@@ -214,18 +224,18 @@ def scan_url(url):
             )
 
             checks.append(
-                "Combined score: 40% rule-based + 60% ML."
+                "Combined score: 40% rule-based + 60% V5 ML."
             )
 
         except Exception as error:
 
-            print("ML prediction error:", error)
+            print("V5 ML prediction error:", error)
 
             score = rule_score
             ml_status = "model_error"
 
             checks.append(
-                "ML prediction failed. "
+                "V5 ML prediction failed. "
                 "Rule-based result is shown."
             )
 
@@ -234,7 +244,7 @@ def scan_url(url):
         score = rule_score
 
         checks.append(
-            "ML model unavailable. "
+            "V5 ML model unavailable. "
             "Rule-based analysis is shown."
         )
 
@@ -245,16 +255,17 @@ def scan_url(url):
     if ml_status == "active":
 
         result = (
-            "Combined rule-based and machine-learning "
-            "analysis completed. This is a risk estimate, "
-            "not proof that a URL is malicious or safe."
+            "V5 character-level machine-learning and "
+            "rule-based analysis completed. This is a "
+            "risk estimate, not proof that a URL is "
+            "malicious or safe."
         )
 
     else:
 
         result = (
             "Rule-based URL analysis completed. "
-            "ML model is currently unavailable."
+            "V5 ML model is currently unavailable."
         )
 
     return {
